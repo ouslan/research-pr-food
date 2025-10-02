@@ -9,6 +9,8 @@ dependencies = [
     "bambi>=0.15.0",
     "duckdb>=1.2.1",
     "geopandas>=1.0.1",
+    "ipykernel>=6.30.1",
+    "jupyter>=1.1.1",
     "libpysal>=4.13.0",
     "mapclassify>=2.8.1",
     "pandas>=2.2.3",
@@ -23,8 +25,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "jupyter>=1.1.1",
+    "cairosvg>=2.8.2",
+    "jupyter-client>=8.6.3",
+    "jupytext>=1.17.3",
+    "kaleido>=1.1.0",
     "matplotlib>=3.10.1",
+    "plotly>=6.3.1",
+    "pnglatex>=1.1",
     "pre-commit>=4.2.0",
     "pynvim>=0.5.2",
+    "pyperclip>=1.11.0",
 ]

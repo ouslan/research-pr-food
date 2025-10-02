@@ -27,7 +27,7 @@ class FoodDeseart(cleanData):
         if "qcewtable" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
             self.make_qcew_dataset()
         df = self.conn.sql(
-            f"""
+            """
             SELECT year,qtr,phys_addr_5_zip,naics_code,ein FROM 'qcewtable';
              """
         ).pl()
@@ -133,8 +133,8 @@ class FoodDeseart(cleanData):
     def make_dataset(self):
         death_df = self.process_death()
         gdf = self.food_data()
-        #remove random zipcode that is in  q4 2019
-        gdf = gdf[gdf["zipcode"] != "00636"] 
+        # remove random zipcode that is in  q4 2019
+        gdf = gdf[gdf["zipcode"] != "00636"]
 
         dp03_df = self.pull_dp03()
         dp03_df = dp03_df.with_columns(qtr=4)
