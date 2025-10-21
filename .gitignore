@@ -175,6 +175,7 @@ cython_debug/
 data/raw/
 data/processed/
 data/external/
+data/qcew/
 # ignore mac files
 *.DS_Store
 
@@ -182,3 +183,6 @@ data/external/
 # vscode
 .vscode
 data_process.log
+docs/aux/*
+docs/out/*
+
