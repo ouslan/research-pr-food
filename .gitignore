@@ -183,4 +183,6 @@ data/qcew/
 # vscode
 .vscode
 data_process.log
+docs/aux/*
+docs/out/*
 
