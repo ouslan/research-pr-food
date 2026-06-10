@@ -11,6 +11,7 @@ from pysal.lib import weights
 from shapely import wkt
 
 from ..jp_qcew.src.data.data_process import cleanData
+from jp_qcew import 
 from ..models import init_death_table, init_dp03_table
 
 

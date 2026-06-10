@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Alejandro Ouslan", email = "alejandro.ouslan@upr.edu" }]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "jp-qcew>=3.2.2",
+]
 
 [project.scripts]
 research-pr-food = "prfood_repl:main"
