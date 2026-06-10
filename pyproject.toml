@@ -10,6 +10,7 @@ dependencies = [
     "duckdb>=1.2.1",
     "geopandas>=1.0.1",
     "ipykernel>=6.30.1",
+    "jp-qcew>=3.2.2",
     "jupyter>=1.1.1",
     "libpysal>=4.13.0",
     "mapclassify>=2.8.1",

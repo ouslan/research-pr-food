@@ -1244,6 +1244,20 @@ wheels = [
 ]
 
 [[package]]
+name = "jp-qcew"
+version = "3.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "duckdb" },
+    { name = "polars" },
+    { name = "pyarrow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d4/8d/fa96ba00b6c2410b78bd0ae4416059b2f617f0fc2ef7303a889b09dc5e81/jp_qcew-3.2.2.tar.gz", hash = "sha256:d300487e9420dbcefb8cc77ca65460771e44b47dde681fe9d9281e9f4f93895f", size = 156152, upload-time = "2026-05-20T12:00:51.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/da/63ecaadb0a39e4d078c34b646f0a1e36a0c4d22dd37ffecdda572edc813b/jp_qcew-3.2.2-py3-none-any.whl", hash = "sha256:5e8dfd67f8c961088eed0304f833120101919e19df89cd5f9ccb9b14abaea411", size = 23418, upload-time = "2026-05-20T12:00:49.411Z" },
+]
+
+[[package]]
 name = "json5"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2538,6 +2552,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "geopandas" },
     { name = "ipykernel" },
+    { name = "jp-qcew" },
     { name = "jupyter" },
     { name = "libpysal" },
     { name = "mapclassify" },
@@ -2573,6 +2588,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.2.1" },
     { name = "geopandas", specifier = ">=1.0.1" },
     { name = "ipykernel", specifier = ">=6.30.1" },
+    { name = "jp-qcew", specifier = ">=3.2.2" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "libpysal", specifier = ">=4.13.0" },
     { name = "mapclassify", specifier = ">=2.8.1" },
