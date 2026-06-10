@@ -26,6 +26,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "cairosvg>=2.8.2",
+    "jupyter>=1.1.1",
     "jupyter-client>=8.6.3",
     "jupytext>=1.17.3",
     "kaleido>=1.1.0",
