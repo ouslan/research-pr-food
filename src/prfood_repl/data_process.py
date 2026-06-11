@@ -4,9 +4,14 @@ import os
 from jp_qcew import CleanQCEW
 import geopandas as gpd
 import polars as pl
+import requests
+from pysal.lib import weights
+from shapely import wkt
+
+from jp_qcew import CleanData
 
 
-class FoodDeseart(CleanQCEW):
+class FoodDeseart(CleanData):
     def __init__(
         self,
         saving_dir: str = "data/",
@@ -15,7 +20,7 @@ class FoodDeseart(CleanQCEW):
         super().__init__(saving_dir, log_file)
 
     def food_data(self) -> gpd.GeoDataFrame:
-        df = CleanQCEW().make_qcew_dataset()
+        df = self.make_qcew_dataset()
         df = df.filter(pl.col("phys_addr_5_zip") != "")
         df = df.with_columns(
             pl.col("phys_addr_5_zip").cast(pl.String).str.zfill(5).alias("zipcode"),

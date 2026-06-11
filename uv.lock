@@ -1401,9 +1401,7 @@ name = "prfood-repl"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "geopandas" },
     { name = "jp-qcew" },
-    { name = "polars" },
 ]
 
 [package.dev-dependencies]
@@ -1414,11 +1412,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "geopandas", specifier = ">=1.1.3" },
-    { name = "jp-qcew", specifier = ">=3.2.2" },
-    { name = "polars", specifier = ">=1.41.2" },
-]
+requires-dist = [{ name = "jp-qcew", specifier = ">=3.2.2" }]
 
 [package.metadata.requires-dev]
 dev = [
