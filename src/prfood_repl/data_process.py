@@ -2,11 +2,16 @@ import logging
 import os
 
 import geopandas as gpd
-import polas as pl
-from jp_qcew import CleanData
+import numpy as np
+import pandas as pd
+import polars as pl
+from CensusForge import CensusAPI
+from jp_qcew import CleanQCEW
+from jp_tools import download
+from libpysal import weights
 
 
-class FoodDeseart(CleanData):
+class FoodDeseart(CleanQCEW):
     def __init__(
         self,
         saving_dir: str = "data/",
@@ -265,7 +270,7 @@ class FoodDeseart(CleanData):
         if "zipstable" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
             # Download the shape files
             if not os.path.exists(f"{self.saving_dir}external/zips_shape.zip"):
-                self.pull_file(
+                download(
                     url="https://www2.census.gov/geo/tiger/TIGER2024/ZCTA520/tl_2024_us_zcta520.zip",
                     filename=f"{self.saving_dir}external/zips_shape.zip",
                 )
