@@ -1,6 +1,8 @@
-import logging
+import hashlib
 import os
-
+import tempfile
+import logging
+from pathlib import Path
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -293,6 +295,56 @@ class FoodDeseart(CleanQCEW):
         else:
             return self.conn.sql("SELECT * FROM zipstable;")
 
+  def county_geom(self) -> gpd.GeoDataFrame:
+        """
+        Retrieves and processes US County TIGER/Line shapefiles with region classifications.
+
+        Downloads the 2025 Census county geometry zip file if not present locally,
+        filters for Puerto Rico (FIPS '72'), joins with internal region mapping,
+        and caches the result as a Parquet file for future use.
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            A GeoDataFrame containing county geometries with the following columns:
+            'statefip', 'geoid', 'name' and 'geometry'.
+        Notes
+        -----
+        The method uses a temporary zip file for the initial download to keep the
+        local storage directory clean. The internal region mapping is loaded from
+        the package resources.
+        """
+        file_path = Path(self.saving_dir) / "external" / "geo-county.parquet"
+
+        # Create a unique hash for the temp file based on the target path
+        name_hash = hashlib.md5(str(file_path).encode()).hexdigest()
+        temp_zip = Path(tempfile.gettempdir()) / f"{name_hash}.zip"
+
+        if not file_path.exists():
+            # Ensure the directory exists
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            download(
+                url="https://www2.census.gov/geo/tiger/TIGER2025/COUNTY/tl_2025_us_county.zip",
+                filename=str(temp_zip),
+            )
+
+            # Process shape
+            gdf = gpd.read_file(temp_zip)
+            gdf = gdf.rename(
+                columns={
+                    "STATEFP": "statefip",
+                    "GEOID": "geoid",
+                    "NAME": "name",
+                }
+            )
+            # Filter for Puerto Rico (FIPS 72)
+            gdf = gdf[gdf["statefip"] == "72"].reset_index()
+            gdf = gdf[["statefip", "geoid", "name", "geometry"]]
+
+            gdf.to_parquet(file_path)
+        return gpd.read_parquet(path=file_path)
+
     def spatial_data(self) -> gpd.GeoDataFrame:
         gdf = gpd.GeoDataFrame(self.make_spatial_table().df())
         gdf["geometry"] = gdf["geometry"].apply(wkt.loads)
@@ -302,8 +354,7 @@ class FoodDeseart(CleanQCEW):
         return gdf
 
     def pull_dp03(self) -> pl.DataFrame:
-        if "DP03Table" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
-            init_dp03_table(self.data_file)
+
         for _year in range(2012, 2020):
             if (
                 self.conn.sql(f"SELECT * FROM 'DP03Table' WHERE year={_year}")
