@@ -36,6 +36,9 @@ MANIFEST
 *.txt
 *.parquet
 
+# Exeption for requirements
+!requirements.txt
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -185,4 +188,4 @@ data/qcew/
 data_process.log
 docs/aux/*
 docs/out/*
-
+qcew

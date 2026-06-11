@@ -1,36 +1,21 @@
 import logging
 import os
 
-import altair as alt
+from jp_qcew import CleanQCEW
 import geopandas as gpd
-import numpy as np
-import pandas as pd
 import polars as pl
-import requests
-from pysal.lib import weights
-from shapely import wkt
-
-from ..jp_qcew.src.data.data_process import cleanData
-from ..models import init_death_table, init_dp03_table
 
 
-class FoodDeseart(cleanData):
+class FoodDeseart(CleanQCEW):
     def __init__(
         self,
         saving_dir: str = "data/",
-        database_file: str = "data.ddb",
         log_file: str = "data_process.log",
     ):
-        super().__init__(saving_dir, database_file, log_file)
+        super().__init__(saving_dir, log_file)
 
     def food_data(self) -> gpd.GeoDataFrame:
-        if "qcewtable" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
-            self.make_qcew_dataset()
-        df = self.conn.sql(
-            """
-            SELECT year,qtr,phys_addr_5_zip,naics_code,ein FROM 'qcewtable';
-             """
-        ).pl()
+        df = CleanQCEW().make_qcew_dataset()
         df = df.filter(pl.col("phys_addr_5_zip") != "")
         df = df.with_columns(
             pl.col("phys_addr_5_zip").cast(pl.String).str.zfill(5).alias("zipcode"),

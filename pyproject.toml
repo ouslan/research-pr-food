@@ -1,38 +1,26 @@
 [project]
-name = "pr-food"
+name = "prfood_repl"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+authors = [{ name = "Alejandro Ouslan", email = "alejandro.ouslan@upr.edu" }]
 requires-python = ">=3.12"
 dependencies = [
-    "altair[all]>=5.5.0",
-    "bambi>=0.15.0",
-    "duckdb>=1.2.1",
-    "geopandas>=1.0.1",
-    "ipykernel>=6.30.1",
-    "jupyter>=1.1.1",
-    "libpysal>=4.13.0",
-    "mapclassify>=2.8.1",
-    "pandas>=2.2.3",
-    "polars>=1.24.0",
-    "pysal>=25.1",
-    "requests>=2.32.3",
-    "seaborn>=0.13.2",
-    "spreg>=1.8.2",
-    "statsmodels>=0.14.4",
-    "tqdm>=4.67.1",
+    "geopandas>=1.1.3",
+    "jp-qcew>=3.2.2",
+    "polars>=1.41.2",
 ]
+
+[project.scripts]
+research-pr-food = "prfood_repl:main"
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.12.0"]
+build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "cairosvg>=2.8.2",
-    "jupyter-client>=8.6.3",
-    "jupytext>=1.17.3",
-    "kaleido>=1.1.0",
-    "matplotlib>=3.10.1",
-    "plotly>=6.3.1",
-    "pnglatex>=1.1",
-    "pre-commit>=4.2.0",
-    "pynvim>=0.5.2",
-    "pyperclip>=1.11.0",
+    "jupyter>=1.1.1",
+    "pre-commit>=4.6.0",
+    "pynvim>=0.6.0",
 ]
