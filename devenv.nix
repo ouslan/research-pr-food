@@ -12,6 +12,7 @@
   languages.python = {
       enable = true;
       uv.enable = true;
+      package = pkgs.python312;
       lsp.enable = true;
     };
 
