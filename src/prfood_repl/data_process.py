@@ -1,13 +1,8 @@
 import logging
 import os
 
-from jp_qcew import CleanQCEW
 import geopandas as gpd
-import polars as pl
-import requests
-from pysal.lib import weights
-from shapely import wkt
-
+import polas as pl
 from jp_qcew import CleanData
 
 
