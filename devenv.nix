@@ -11,9 +11,15 @@
   # languages.rust.enable = true;
   languages.python = {
       enable = true;
-      uv.enable = true;
+      uv = {
+      enable = true;
+      # Automatically run `uv sync` to populate .venv whenever entering the environment
+      sync.enable = true;
+    };
       package = pkgs.python312;
       lsp.enable = true;
+      venv.enable = true;
+
     };
 
   # https://devenv.sh/processes/
