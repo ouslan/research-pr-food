@@ -2,25 +2,36 @@
 
 {
   # https://devenv.sh/basics/
-  env.GREET = "devenv";
+  env = {
+    GREET = "devenv";
+    OCO_AI_PROVIDER = "ollama";
+    OCO_PROMPT_MODULE = "conventional-commit"; 
+    OCO_MODEL = "qwen3-coder-next:latest";
+  };
+
+  dotenv.enable = true;
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git ];
+  packages = with pkgs; [
+    git
+    git-cliff
+    opencommit
+    jupyter
+    nixpkgs-fmt
+  ];
 
   # https://devenv.sh/languages/
-  # languages.rust.enable = true;
   languages.python = {
+    enable = true;
+    package = pkgs.python312;
+    lsp.enable = true;
+    venv.enable = true;
+    
+    uv = {
       enable = true;
-      uv = {
-      enable = true;
-      # Automatically run `uv sync` to populate .venv whenever entering the environment
       sync.enable = true;
     };
-      package = pkgs.python312;
-      lsp.enable = true;
-      venv.enable = true;
-
-    };
+  };
 
   # https://devenv.sh/processes/
   # processes.dev.exec = "${lib.getExe pkgs.watchexec} -n -- ls -la";
@@ -35,8 +46,9 @@
 
   # https://devenv.sh/basics/
   enterShell = ''
-    hello         # Run scripts directly
-    git --version # Use packages
+    hello
+    git --version
+    export OCO_API_CUSTOM_HEADERS="{\"Authorization\": \"Bearer $OLLAMA_API_KEY\"}"
   '';
 
   # https://devenv.sh/tasks/
@@ -53,6 +65,18 @@
 
   # https://devenv.sh/git-hooks/
   # git-hooks.hooks.shellcheck.enable = true;
+# https://devenv.sh/git-hooks/
+  git-hooks.hooks = {
+  # 1. The Jupyter Notebook Clear Output Hook (Local/Custom)
+  jupyter-nb-clear-output = {
+    enable = true;
+    name = "jupyter-nb-clear-output";
+    entry = "jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace";
+    files = "\\.ipynb$";
+    stages = [ "pre-commit" ];
+  };
+
+  };
 
   # See full reference at https://devenv.sh/reference/options/
 }
