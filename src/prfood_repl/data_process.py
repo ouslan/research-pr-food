@@ -295,7 +295,7 @@ class FoodDeseart(CleanQCEW):
         else:
             return self.conn.sql("SELECT * FROM zipstable;")
 
-  def county_geom(self) -> gpd.GeoDataFrame:
+    def county_geom(self) -> gpd.GeoDataFrame:
         """
         Retrieves and processes US County TIGER/Line shapefiles with region classifications.
 
