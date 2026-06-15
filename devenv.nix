@@ -6,7 +6,7 @@
     GREET = "devenv";
     OCO_AI_PROVIDER = "ollama";
     OCO_PROMPT_MODULE = "conventional-commit"; 
-    OCO_MODEL = "qwen3-coder-next:latest";
+    OCO_MODEL = "qwen2.5-coder:3b";
   };
 
   dotenv.enable = true;
