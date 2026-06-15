@@ -1,13 +1,12 @@
 import hashlib
-import os
-import tempfile
 import logging
+import tempfile
 from pathlib import Path
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import polars as pl
-from CensusForge import CensusAPI
 from jp_qcew import CleanQCEW
 from jp_tools import download
 from libpysal import weights
@@ -267,33 +266,38 @@ class FoodDeseart(CleanQCEW):
         df = df.drop("column_0").transpose()
         return df.rename(names).with_columns(year=pl.lit(year))
 
-    def make_spatial_table(self):
-        # initiiate the database tables
-        if "zipstable" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
-            # Download the shape files
-            if not os.path.exists(f"{self.saving_dir}external/zips_shape.zip"):
-                download(
-                    url="https://www2.census.gov/geo/tiger/TIGER2024/ZCTA520/tl_2024_us_zcta520.zip",
-                    filename=f"{self.saving_dir}external/zips_shape.zip",
-                )
-                logging.info("Downloaded zipcode shape files")
+    def zips_goem(self) -> pd.DataFrame:
+        file_path = Path(self.saving_dir) / "external" / "geo-zipcode.parquet"
 
-            # Process and insert the shape files
-            gdf = gpd.read_file(f"{self.saving_dir}external/zips_shape.zip")
-            gdf = gdf[gdf["ZCTA5CE20"].str.startswith("00")]
-            gdf = gdf.rename(columns={"ZCTA5CE20": "zipcode"}).reset_index()
+        # Create a unique hash for the temp file based on the target path
+        name_hash = hashlib.md5(str(file_path).encode()).hexdigest()
+        temp_zip = Path(tempfile.gettempdir()) / f"{name_hash}.zip"
+        if not file_path.exists():
+            download(
+                url="https://www2.census.gov/geo/tiger/TIGER2024/ZCTA520/tl_2024_us_zcta520.zip",
+                filename=str(temp_zip),
+            )
+            # Process files
+            gdf = gpd.read_file(temp_zip)
+            gdf = gdf.rename(columns={"ZCTA5CE20": "zipcode"})
+            gdf = gdf[gdf["zipcode"].str.startswith("00")].reset_index(drop=True)
             gdf = gdf[["zipcode", "geometry"]]
             gdf["zipcode"] = gdf["zipcode"].str.strip()
-            df = gdf.drop(columns="geometry")
-            geometry = gdf["geometry"].apply(lambda geom: geom.wkt)
-            df["geometry"] = geometry
-            self.conn.execute("CREATE TABLE zipstable AS SELECT * FROM df")
+
+            # Remove disjointed goemetries
+            gdf = gdf[~gdf["zipcode"].isin(["00820", "00850", "00851"])]
+            gdf = gdf.to_crs(epsg=5070)
+            gdf = gdf.explode(ignore_index=True)
+            connected_mask = gdf.geometry.apply(
+                lambda geom: gdf.geometry.intersects(geom).sum() > 1
+            )
+            gdf = gdf.loc[connected_mask]
+            gdf = gdf.dissolve(by="zipcode", as_index=False)
+            gdf.to_parquet(file_path)
             logging.info(
                 f"The zipstable is empty inserting {self.saving_dir}external/cousub.zip"
             )
-            return self.conn.sql("SELECT * FROM zipstable;")
-        else:
-            return self.conn.sql("SELECT * FROM zipstable;")
+        return gpd.read_parquet(path=file_path)
 
     def county_geom(self) -> gpd.GeoDataFrame:
         """
@@ -344,14 +348,6 @@ class FoodDeseart(CleanQCEW):
 
             gdf.to_parquet(file_path)
         return gpd.read_parquet(path=file_path)
-
-    def spatial_data(self) -> gpd.GeoDataFrame:
-        gdf = gpd.GeoDataFrame(self.make_spatial_table().df())
-        gdf["geometry"] = gdf["geometry"].apply(wkt.loads)
-        gdf = gdf.set_geometry("geometry").set_crs("EPSG:4269", allow_override=True)
-        gdf = gdf.to_crs("EPSG:3395")
-        gdf["zipcode"] = gdf["zipcode"].astype(str)
-        return gdf
 
     def pull_dp03(self) -> pl.DataFrame:
 
