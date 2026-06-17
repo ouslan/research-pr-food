@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -7,9 +8,12 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import polars as pl
+from dotenv import load_dotenv
 from jp_qcew import CleanQCEW
 from jp_tools import download
 from libpysal import weights
+
+load_dotenv()
 
 
 class FoodDeseart(CleanQCEW):
@@ -248,24 +252,6 @@ class FoodDeseart(CleanQCEW):
         else:
             return self.conn.sql("SELECT * FROM 'DeathTable';").pl()
 
-    def pull_query(self, params: list, year: int) -> pl.DataFrame:
-        # prepare custom census query
-        param = ",".join(params)
-        base = "https://api.census.gov/data/"
-        flow = "/acs/acs5/profile"
-        url = f"{base}{year}{flow}?get={param}&for=zip%20code%20tabulation%20area:*&in=state:72"
-        logging.debug(url)
-        df = pl.DataFrame(requests.get(url).json())
-
-        # get names from DataFrame
-        names = df.select(pl.col("column_0")).transpose()
-        names = names.to_dicts().pop()
-        names = dict((k, v.lower()) for k, v in names.items())
-
-        # Pivot table
-        df = df.drop("column_0").transpose()
-        return df.rename(names).with_columns(year=pl.lit(year))
-
     def zips_goem(self) -> pd.DataFrame:
         file_path = Path(self.saving_dir) / "external" / "geo-zipcode.parquet"
 
@@ -348,6 +334,92 @@ class FoodDeseart(CleanQCEW):
 
             gdf.to_parquet(file_path)
         return gpd.read_parquet(path=file_path)
+
+    def pull_dp05(self) -> pl.DataFrame:
+        """
+        Fetches ACS5 DP05 (Demographic and Housing Estimates) data for years 2011-2023.
+
+        Checks for local Parquet files; if missing, it queries the Census API,
+        processes the raw response into a cleaned format with proper data types,
+        renames columns for readability, and saves the result to disk.
+
+        Returns
+        -------
+        pl.DataFrame
+            A Polars DataFrame containing the aggregated DP05 data for all years.
+        """
+        for _year in range(2011, 2025):
+            year_dir = self.saving_dir / "raw" / "acs5" / str(_year)
+            file_path = year_dir / "data.parquet"
+
+            if not file_path.exists():
+                year_dir.mkdir(parents=True, exist_ok=True)
+
+                logging.info(f"pulling {_year} data")
+                r = CensusAPI(os.getenv("CENSUS_TOKEN")).query(
+                    params_list=[
+                        "DP03_0001E",
+                        "DP03_0003E",
+                        "DP03_0004E",
+                        "DP03_0005E",
+                        "DP03_0006E",
+                        "DP03_0007E",
+                        "DP03_0014E",
+                        "DP03_0025E",
+                        "DP03_0033E",
+                        "DP03_0051E",
+                        "DP03_0052E",
+                        "DP03_0053E",
+                        "DP03_0054E",
+                        "DP03_0055E",
+                        "DP03_0056E",
+                        "DP03_0057E",
+                        "DP03_0058E",
+                        "DP03_0059E",
+                        "DP03_0060E",
+                        "DP03_0061E",
+                    ],
+                    year=_year,
+                    geography="county",
+                    dataset="acs-acs5-profile",
+                )
+                df = pl.DataFrame(r)
+                df = df.rename(df.row(0, named=True))
+                df = df.slice(1).with_columns(
+                    pl.col("*").exclude("state", "county").cast(pl.Float64)
+                )
+                df = df.rename(
+                    {
+                        "dp03_0001e": "total_population",
+                        "dp03_0003e": "total_civilian_force",
+                        "dp03_0004e": "total_labor_force",
+                        "dp03_0005e": "total_unemployed",
+                        "dp03_0006e": "total_armed_forces",
+                        "dp03_0007e": "total_not_labor",
+                        "dp03_0014e": "total_own_children",
+                        "dp03_0025e": "mean_travel_time",
+                        "dp03_0033e": "agr_fish_employment",
+                        "dp03_0051e": "total_house",
+                        "dp03_0052e": "inc_less_10k",
+                        "dp03_0053e": "inc_10k_15k",
+                        "dp03_0054e": "inc_15k_25k",
+                        "dp03_0055e": "inc_25k_35k",
+                        "dp03_0056e": "inc_35k_50k",
+                        "dp03_0057e": "inc_50k_75k",
+                        "dp03_0058e": "inc_75k_100k",
+                        "dp03_0059e": "inc_100k_150k",
+                        "dp03_0060e": "inc_150k_200k",
+                        "dp03_0061e": "inc_more_200k",
+                    }
+                )
+                df = df.with_columns(
+                    year=_year,
+                    geoid=pl.col("state").str.zfill(2) + pl.col("county").str.zfill(3),
+                )
+                df.write_parquet(file=file_path)
+        return self.conn.sql(
+            f"SELECT * FROM '{self.saving_dir}/raw/acs5/**/*.parquet';"
+        ).pl()
 
     def pull_dp03(self) -> pl.DataFrame:
 
