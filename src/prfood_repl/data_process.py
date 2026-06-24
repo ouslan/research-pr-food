@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from jp_qcew import CleanQCEW
 from jp_tools import download
 from libpysal import weights
+import altair as alt
 
 load_dotenv()
 
@@ -75,7 +76,7 @@ class FoodDeseart(CleanQCEW):
         df = df.with_columns(
             total_food=pl.col("supermarkets") + pl.col("convenience_retailers")
         )
-        gdf = self.spatial_data()
+        gdf = self.zips_goem()
 
         gdf = gdf.join(
             df.to_pandas().set_index("zipcode"),
@@ -86,17 +87,17 @@ class FoodDeseart(CleanQCEW):
 
         gdf = gdf.reset_index(drop=True)
         gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
-        gdf["supermarkets_and_others_area"] = gdf["supermarkets_and_others"] / (
-            gdf.area * 1000
-        )
-        gdf["supermarkets_area"] = gdf["supermarkets"] / (gdf.area * 1000)
-        gdf["convenience_retailers_area"] = gdf["convenience_retailers"] / (
-            gdf.area * 1000
-        )
-        gdf["whole_foods_area"] = gdf["whole_foods"] / (gdf.area * 1000)
-        gdf["total_food_area"] = gdf["total_food"] / (gdf.area * 1000)
-        gdf["construction_area"] = gdf["construction"] / (gdf.area * 1000)
-        gdf["finance_area"] = gdf["finance"] / (gdf.area * 1000)
+        gdf = gdf.to_crs(epsg=5070)
+
+        sq_km = gdf.area / 1_000_000
+
+        gdf["supermarkets_and_others_area"] = gdf["supermarkets_and_others"] / sq_km
+        gdf["supermarkets_area"] = gdf["supermarkets"] / sq_km
+        gdf["convenience_retailers_area"] = gdf["convenience_retailers"] / sq_km
+        gdf["whole_foods_area"] = gdf["whole_foods"] / sq_km
+        gdf["total_food_area"] = gdf["total_food"] / sq_km
+        gdf["construction_area"] = gdf["construction"] / sq_km
+        gdf["finance_area"] = gdf["finance"] / sq_km
 
         return gdf
 
@@ -497,37 +498,67 @@ class FoodDeseart(CleanQCEW):
         return self.conn.sql("SELECT * FROM 'DP03Table';").pl()
 
     def gen_food_graph(self, var: str, year: int, qtr: int, title: str):
-        # define data
-        df = self.food_data(year=year, qtr=qtr)
+        # 1. Fetch the data payload (Returns a GeoDataFrame)
+        master_gdf = self.food_data()
+        master_gdf = master_gdf.to_crs(epsg=4326)
 
-        # define choropleth scale
-        quant = df[var]
-        domain = [
-            0,
-            quant.quantile(0.25),
-            quant.quantile(0.50),
-            quant.quantile(0.75),
-            quant.max(),
-        ]
-        scale = alt.Scale(domain=domain, scheme="viridis")
-        # define choropleth chart
+        # 2. Match your example's pattern: Safe Pandas filtering to prevent slicing errors
+        df = master_gdf[
+            (master_gdf["year"] == year) & (master_gdf["qtr"] == qtr)
+        ].copy()
+
+        # Early exit if dataframe is empty for the given year/qtr (from your example)
+        if df.empty:
+            return (
+                alt.Chart()
+                .mark_text()
+                .properties(title=f"No data available for {year} Q{qtr}")
+            )
+
+        # 3. Build the production-ready map exactly matching your template's architecture
         choropleth = (
-            alt.Chart(df, title=title)
-            .mark_geoshape()
-            .transform_lookup(
-                lookup="zipcode",
-                from_=alt.LookupData(data=df, key="zipcode", fields=[var]),
+            alt.Chart(df)
+            .mark_geoshape(
+                stroke="white",  # Clear borders between zip codes
+                strokeWidth=0.5,
             )
             .encode(
-                alt.Color(
+                color=alt.Color(
                     f"{var}:Q",
-                    scale=scale,
-                    legend=alt.Legend(direction="horizontal", orient="bottom"),
-                )
+                    scale=alt.Scale(
+                        scheme="viridis",
+                        type="quantile",  # Switched to quantile per your working example for skewed density counts
+                    ),
+                    legend=alt.Legend(
+                        title=var.replace("_area", " per Sq Km")
+                        .replace("_", " ")
+                        .title(),
+                        direction="horizontal",
+                        orient="bottom",
+                        format=".2f",
+                        gradientLength=200,
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("zipcode:N", title="ZIP Code"),
+                    alt.Tooltip(
+                        f"{var}:Q",
+                        title=var.replace("_", " ").title(),
+                        format=".4f",
+                    ),
+                ],
             )
             .project(type="mercator")
-            .properties(width="container", height=300)
+            .properties(
+                title=f"{title} ({year} Q{qtr})",
+                width="container",
+                height=300,
+            )
+            .configure_view(
+                strokeWidth=0
+            )  # Removes the ugly rectangular chart box around the map
         )
+
         return choropleth
 
     def calculate_spatial_lag(self, df, w, column) -> np.ndarray:
