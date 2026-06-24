@@ -26,80 +26,87 @@ class FoodDeseart(CleanQCEW):
         super().__init__(saving_dir, log_file)
 
     def food_data(self) -> gpd.GeoDataFrame:
-        df = self.make_qcew_dataset()
-        df = df.filter(pl.col("phys_addr_5_zip") != "")
-        df = df.with_columns(
-            pl.col("phys_addr_5_zip").cast(pl.String).str.zfill(5).alias("zipcode"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4451"))
-            .then(1)
-            .otherwise(0)
-            .alias("supermarkets_and_others"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44511"))
-            .then(1)
-            .otherwise(0)
-            .alias("supermarkets"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44513"))
-            .then(1)
-            .otherwise(0)
-            .alias("convenience_retailers"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4452"))
-            .then(1)
-            .otherwise(0)
-            .alias("whole_foods"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("23"))
-            .then(1)
-            .otherwise(0)
-            .alias("construction"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("52"))
-            .then(1)
-            .otherwise(0)
-            .alias("finance"),
-            pl.when(pl.col("ein").cast(pl.String).str.starts_with("911223280"))
-            .then(1)
-            .otherwise(0)
-            .alias("costco"),
-            pl.when(pl.col("ein").cast(pl.String).str.starts_with("660475164"))
-            .then(1)
-            .otherwise(0)
-            .alias("walmart"),
-        )
 
-        df = df.group_by(["year", "qtr", "zipcode"]).agg(
-            supermarkets_and_others=pl.col("supermarkets_and_others").sum(),
-            supermarkets=pl.col("supermarkets").sum(),
-            convenience_retailers=pl.col("convenience_retailers").sum(),
-            whole_foods=pl.col("whole_foods").sum(),
-            construction=pl.col("construction").sum(),
-            finance=pl.col("finance").sum(),
-        )
+        file_path = self.saving_dir / "processed" / "food_data.parquet"
 
-        df = df.with_columns(
-            total_food=pl.col("supermarkets") + pl.col("convenience_retailers")
-        )
-        gdf = self.zips_goem()
+        if not file_path.exists():
 
-        gdf = gdf.join(
-            df.to_pandas().set_index("zipcode"),
-            on="zipcode",
-            how="inner",
-            validate="1:m",
-        )
+            df = self.make_qcew_dataset()
+            df = df.filter(pl.col("phys_addr_5_zip") != "")
+            df = df.with_columns(
+                pl.col("phys_addr_5_zip").cast(pl.String).str.zfill(5).alias("zipcode"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4451"))
+                .then(1)
+                .otherwise(0)
+                .alias("supermarkets_and_others"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44511"))
+                .then(1)
+                .otherwise(0)
+                .alias("supermarkets"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44513"))
+                .then(1)
+                .otherwise(0)
+                .alias("convenience_retailers"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4452"))
+                .then(1)
+                .otherwise(0)
+                .alias("whole_foods"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("23"))
+                .then(1)
+                .otherwise(0)
+                .alias("construction"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("52"))
+                .then(1)
+                .otherwise(0)
+                .alias("finance"),
+                pl.when(pl.col("ein").cast(pl.String).str.starts_with("911223280"))
+                .then(1)
+                .otherwise(0)
+                .alias("costco"),
+                pl.when(pl.col("ein").cast(pl.String).str.starts_with("660475164"))
+                .then(1)
+                .otherwise(0)
+                .alias("walmart"),
+            )
 
-        gdf = gdf.reset_index(drop=True)
-        gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
-        gdf = gdf.to_crs(epsg=5070)
+            df = df.group_by(["year", "qtr", "zipcode"]).agg(
+                supermarkets_and_others=pl.col("supermarkets_and_others").sum(),
+                supermarkets=pl.col("supermarkets").sum(),
+                convenience_retailers=pl.col("convenience_retailers").sum(),
+                whole_foods=pl.col("whole_foods").sum(),
+                construction=pl.col("construction").sum(),
+                finance=pl.col("finance").sum(),
+            )
 
-        sq_km = gdf.area / 1_000_000
+            df = df.with_columns(
+                total_food=pl.col("supermarkets") + pl.col("convenience_retailers")
+            )
+            gdf = self.zips_goem()
 
-        gdf["supermarkets_and_others_area"] = gdf["supermarkets_and_others"] / sq_km
-        gdf["supermarkets_area"] = gdf["supermarkets"] / sq_km
-        gdf["convenience_retailers_area"] = gdf["convenience_retailers"] / sq_km
-        gdf["whole_foods_area"] = gdf["whole_foods"] / sq_km
-        gdf["total_food_area"] = gdf["total_food"] / sq_km
-        gdf["construction_area"] = gdf["construction"] / sq_km
-        gdf["finance_area"] = gdf["finance"] / sq_km
+            gdf = gdf.join(
+                df.to_pandas().set_index("zipcode"),
+                on="zipcode",
+                how="inner",
+                validate="1:m",
+            )
 
-        return gdf
+            gdf = gdf.reset_index(drop=True)
+            gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
+            gdf = gdf.to_crs(epsg=5070)
+
+            sq_km = gdf.area / 1_000_000
+
+            gdf["supermarkets_and_others_area"] = gdf["supermarkets_and_others"] / sq_km
+            gdf["supermarkets_area"] = gdf["supermarkets"] / sq_km
+            gdf["convenience_retailers_area"] = gdf["convenience_retailers"] / sq_km
+            gdf["whole_foods_area"] = gdf["whole_foods"] / sq_km
+            gdf["total_food_area"] = gdf["total_food"] / sq_km
+            gdf["construction_area"] = gdf["construction"] / sq_km
+            gdf["finance_area"] = gdf["finance"] / sq_km
+
+            gdf.to_parquet(file_path)
+
+        return gpd.read_parquet(path=file_path)
 
     def process_death(self) -> pl.DataFrame:
         df = self.pull_death()
@@ -254,7 +261,7 @@ class FoodDeseart(CleanQCEW):
             return self.conn.sql("SELECT * FROM 'DeathTable';").pl()
 
     def zips_goem(self) -> pd.DataFrame:
-        file_path = Path(self.saving_dir) / "external" / "geo-zipcode.parquet"
+        file_path = self.saving_dir / "external" / "geo-zipcode.parquet"
 
         # Create a unique hash for the temp file based on the target path
         name_hash = hashlib.md5(str(file_path).encode()).hexdigest()
