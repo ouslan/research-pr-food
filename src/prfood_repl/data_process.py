@@ -1,9 +1,20 @@
+import hashlib
 import logging
 import os
+import tempfile
+from pathlib import Path
 
-from jp_qcew import CleanQCEW
 import geopandas as gpd
+import numpy as np
+import pandas as pd
 import polars as pl
+from dotenv import load_dotenv
+from jp_qcew import CleanQCEW
+from jp_tools import download
+from libpysal import weights
+import altair as alt
+
+load_dotenv()
 
 
 class FoodDeseart(CleanQCEW):
@@ -15,80 +26,87 @@ class FoodDeseart(CleanQCEW):
         super().__init__(saving_dir, log_file)
 
     def food_data(self) -> gpd.GeoDataFrame:
-        df = CleanQCEW().make_qcew_dataset()
-        df = df.filter(pl.col("phys_addr_5_zip") != "")
-        df = df.with_columns(
-            pl.col("phys_addr_5_zip").cast(pl.String).str.zfill(5).alias("zipcode"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4451"))
-            .then(1)
-            .otherwise(0)
-            .alias("supermarkets_and_others"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44511"))
-            .then(1)
-            .otherwise(0)
-            .alias("supermarkets"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44513"))
-            .then(1)
-            .otherwise(0)
-            .alias("convenience_retailers"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4452"))
-            .then(1)
-            .otherwise(0)
-            .alias("whole_foods"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("23"))
-            .then(1)
-            .otherwise(0)
-            .alias("construction"),
-            pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("52"))
-            .then(1)
-            .otherwise(0)
-            .alias("finance"),
-            pl.when(pl.col("ein").cast(pl.String).str.starts_with("911223280"))
-            .then(1)
-            .otherwise(0)
-            .alias("costco"),
-            pl.when(pl.col("ein").cast(pl.String).str.starts_with("660475164"))
-            .then(1)
-            .otherwise(0)
-            .alias("walmart"),
-        )
 
-        df = df.group_by(["year", "qtr", "zipcode"]).agg(
-            supermarkets_and_others=pl.col("supermarkets_and_others").sum(),
-            supermarkets=pl.col("supermarkets").sum(),
-            convenience_retailers=pl.col("convenience_retailers").sum(),
-            whole_foods=pl.col("whole_foods").sum(),
-            construction=pl.col("construction").sum(),
-            finance=pl.col("finance").sum(),
-        )
+        file_path = self.saving_dir / "processed" / "food_data.parquet"
 
-        df = df.with_columns(
-            total_food=pl.col("supermarkets") + pl.col("convenience_retailers")
-        )
-        gdf = self.spatial_data()
+        if not file_path.exists():
 
-        gdf = gdf.join(
-            df.to_pandas().set_index("zipcode"),
-            on="zipcode",
-            how="inner",
-            validate="1:m",
-        )
+            df = self.make_qcew_dataset()
+            df = df.filter(pl.col("phys_addr_5_zip") != "")
+            df = df.with_columns(
+                pl.col("phys_addr_5_zip").cast(pl.String).str.zfill(5).alias("zipcode"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4451"))
+                .then(1)
+                .otherwise(0)
+                .alias("supermarkets_and_others"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44511"))
+                .then(1)
+                .otherwise(0)
+                .alias("supermarkets"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("44513"))
+                .then(1)
+                .otherwise(0)
+                .alias("convenience_retailers"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("4452"))
+                .then(1)
+                .otherwise(0)
+                .alias("whole_foods"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("23"))
+                .then(1)
+                .otherwise(0)
+                .alias("construction"),
+                pl.when(pl.col("naics_code").cast(pl.String).str.starts_with("52"))
+                .then(1)
+                .otherwise(0)
+                .alias("finance"),
+                pl.when(pl.col("ein").cast(pl.String).str.starts_with("911223280"))
+                .then(1)
+                .otherwise(0)
+                .alias("costco"),
+                pl.when(pl.col("ein").cast(pl.String).str.starts_with("660475164"))
+                .then(1)
+                .otherwise(0)
+                .alias("walmart"),
+            )
 
-        gdf = gdf.reset_index(drop=True)
-        gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
-        gdf["supermarkets_and_others_area"] = gdf["supermarkets_and_others"] / (
-            gdf.area * 1000
-        )
-        gdf["supermarkets_area"] = gdf["supermarkets"] / (gdf.area * 1000)
-        gdf["convenience_retailers_area"] = gdf["convenience_retailers"] / (
-            gdf.area * 1000
-        )
-        gdf["whole_foods_area"] = gdf["whole_foods"] / (gdf.area * 1000)
-        gdf["total_food_area"] = gdf["total_food"] / (gdf.area * 1000)
-        gdf["construction_area"] = gdf["construction"] / (gdf.area * 1000)
-        gdf["finance_area"] = gdf["finance"] / (gdf.area * 1000)
+            df = df.group_by(["year", "qtr", "zipcode"]).agg(
+                supermarkets_and_others=pl.col("supermarkets_and_others").sum(),
+                supermarkets=pl.col("supermarkets").sum(),
+                convenience_retailers=pl.col("convenience_retailers").sum(),
+                whole_foods=pl.col("whole_foods").sum(),
+                construction=pl.col("construction").sum(),
+                finance=pl.col("finance").sum(),
+            )
 
-        return gdf
+            df = df.with_columns(
+                total_food=pl.col("supermarkets") + pl.col("convenience_retailers")
+            )
+            gdf = self.zips_goem()
+
+            gdf = gdf.join(
+                df.to_pandas().set_index("zipcode"),
+                on="zipcode",
+                how="inner",
+                validate="1:m",
+            )
+
+            gdf = gdf.reset_index(drop=True)
+            gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
+            gdf = gdf.to_crs(epsg=5070)
+
+            sq_km = gdf.area / 1_000_000
+
+            gdf["supermarkets_and_others_area"] = gdf["supermarkets_and_others"] / sq_km
+            gdf["supermarkets_area"] = gdf["supermarkets"] / sq_km
+            gdf["convenience_retailers_area"] = gdf["convenience_retailers"] / sq_km
+            gdf["whole_foods_area"] = gdf["whole_foods"] / sq_km
+            gdf["total_food_area"] = gdf["total_food"] / sq_km
+            gdf["construction_area"] = gdf["construction"] / sq_km
+            gdf["finance_area"] = gdf["finance"] / sq_km
+
+            gdf.to_parquet(file_path)
+
+        return gpd.read_parquet(path=file_path)
 
     def process_death(self) -> pl.DataFrame:
         df = self.pull_death()
@@ -242,63 +260,177 @@ class FoodDeseart(CleanQCEW):
         else:
             return self.conn.sql("SELECT * FROM 'DeathTable';").pl()
 
-    def pull_query(self, params: list, year: int) -> pl.DataFrame:
-        # prepare custom census query
-        param = ",".join(params)
-        base = "https://api.census.gov/data/"
-        flow = "/acs/acs5/profile"
-        url = f"{base}{year}{flow}?get={param}&for=zip%20code%20tabulation%20area:*&in=state:72"
-        logging.debug(url)
-        df = pl.DataFrame(requests.get(url).json())
+    def zips_goem(self) -> pd.DataFrame:
+        file_path = self.saving_dir / "external" / "geo-zipcode.parquet"
 
-        # get names from DataFrame
-        names = df.select(pl.col("column_0")).transpose()
-        names = names.to_dicts().pop()
-        names = dict((k, v.lower()) for k, v in names.items())
-
-        # Pivot table
-        df = df.drop("column_0").transpose()
-        return df.rename(names).with_columns(year=pl.lit(year))
-
-    def make_spatial_table(self):
-        # initiiate the database tables
-        if "zipstable" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
-            # Download the shape files
-            if not os.path.exists(f"{self.saving_dir}external/zips_shape.zip"):
-                self.pull_file(
-                    url="https://www2.census.gov/geo/tiger/TIGER2024/ZCTA520/tl_2024_us_zcta520.zip",
-                    filename=f"{self.saving_dir}external/zips_shape.zip",
-                )
-                logging.info("Downloaded zipcode shape files")
-
-            # Process and insert the shape files
-            gdf = gpd.read_file(f"{self.saving_dir}external/zips_shape.zip")
-            gdf = gdf[gdf["ZCTA5CE20"].str.startswith("00")]
-            gdf = gdf.rename(columns={"ZCTA5CE20": "zipcode"}).reset_index()
+        # Create a unique hash for the temp file based on the target path
+        name_hash = hashlib.md5(str(file_path).encode()).hexdigest()
+        temp_zip = Path(tempfile.gettempdir()) / f"{name_hash}.zip"
+        if not file_path.exists():
+            download(
+                url="https://www2.census.gov/geo/tiger/TIGER2024/ZCTA520/tl_2024_us_zcta520.zip",
+                filename=str(temp_zip),
+            )
+            # Process files
+            gdf = gpd.read_file(temp_zip)
+            gdf = gdf.rename(columns={"ZCTA5CE20": "zipcode"})
+            gdf = gdf[gdf["zipcode"].str.startswith("00")].reset_index(drop=True)
             gdf = gdf[["zipcode", "geometry"]]
             gdf["zipcode"] = gdf["zipcode"].str.strip()
-            df = gdf.drop(columns="geometry")
-            geometry = gdf["geometry"].apply(lambda geom: geom.wkt)
-            df["geometry"] = geometry
-            self.conn.execute("CREATE TABLE zipstable AS SELECT * FROM df")
+
+            # Remove disjointed goemetries
+            gdf = gdf[~gdf["zipcode"].isin(["00820", "00850", "00851"])]
+            gdf = gdf.to_crs(epsg=5070)
+            gdf = gdf.explode(ignore_index=True)
+            connected_mask = gdf.geometry.apply(
+                lambda geom: gdf.geometry.intersects(geom).sum() > 1
+            )
+            gdf = gdf.loc[connected_mask]
+            gdf = gdf.dissolve(by="zipcode", as_index=False)
+            gdf.to_parquet(file_path)
             logging.info(
                 f"The zipstable is empty inserting {self.saving_dir}external/cousub.zip"
             )
-            return self.conn.sql("SELECT * FROM zipstable;")
-        else:
-            return self.conn.sql("SELECT * FROM zipstable;")
+        return gpd.read_parquet(path=file_path)
 
-    def spatial_data(self) -> gpd.GeoDataFrame:
-        gdf = gpd.GeoDataFrame(self.make_spatial_table().df())
-        gdf["geometry"] = gdf["geometry"].apply(wkt.loads)
-        gdf = gdf.set_geometry("geometry").set_crs("EPSG:4269", allow_override=True)
-        gdf = gdf.to_crs("EPSG:3395")
-        gdf["zipcode"] = gdf["zipcode"].astype(str)
-        return gdf
+    def county_geom(self) -> gpd.GeoDataFrame:
+        """
+        Retrieves and processes US County TIGER/Line shapefiles with region classifications.
+
+        Downloads the 2025 Census county geometry zip file if not present locally,
+        filters for Puerto Rico (FIPS '72'), joins with internal region mapping,
+        and caches the result as a Parquet file for future use.
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            A GeoDataFrame containing county geometries with the following columns:
+            'statefip', 'geoid', 'name' and 'geometry'.
+        Notes
+        -----
+        The method uses a temporary zip file for the initial download to keep the
+        local storage directory clean. The internal region mapping is loaded from
+        the package resources.
+        """
+        file_path = Path(self.saving_dir) / "external" / "geo-county.parquet"
+
+        # Create a unique hash for the temp file based on the target path
+        name_hash = hashlib.md5(str(file_path).encode()).hexdigest()
+        temp_zip = Path(tempfile.gettempdir()) / f"{name_hash}.zip"
+
+        if not file_path.exists():
+            # Ensure the directory exists
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            download(
+                url="https://www2.census.gov/geo/tiger/TIGER2025/COUNTY/tl_2025_us_county.zip",
+                filename=str(temp_zip),
+            )
+
+            # Process shape
+            gdf = gpd.read_file(temp_zip)
+            gdf = gdf.rename(
+                columns={
+                    "STATEFP": "statefip",
+                    "GEOID": "geoid",
+                    "NAME": "name",
+                }
+            )
+            # Filter for Puerto Rico (FIPS 72)
+            gdf = gdf[gdf["statefip"] == "72"].reset_index()
+            gdf = gdf[["statefip", "geoid", "name", "geometry"]]
+
+            gdf.to_parquet(file_path)
+        return gpd.read_parquet(path=file_path)
+
+    def pull_dp05(self) -> pl.DataFrame:
+        """
+        Fetches ACS5 DP05 (Demographic and Housing Estimates) data for years 2011-2023.
+
+        Checks for local Parquet files; if missing, it queries the Census API,
+        processes the raw response into a cleaned format with proper data types,
+        renames columns for readability, and saves the result to disk.
+
+        Returns
+        -------
+        pl.DataFrame
+            A Polars DataFrame containing the aggregated DP05 data for all years.
+        """
+        for _year in range(2011, 2025):
+            year_dir = self.saving_dir / "raw" / "acs5" / str(_year)
+            file_path = year_dir / "data.parquet"
+
+            if not file_path.exists():
+                year_dir.mkdir(parents=True, exist_ok=True)
+
+                logging.info(f"pulling {_year} data")
+                r = CensusAPI(os.getenv("CENSUS_TOKEN")).query(
+                    params_list=[
+                        "DP03_0001E",
+                        "DP03_0003E",
+                        "DP03_0004E",
+                        "DP03_0005E",
+                        "DP03_0006E",
+                        "DP03_0007E",
+                        "DP03_0014E",
+                        "DP03_0025E",
+                        "DP03_0033E",
+                        "DP03_0051E",
+                        "DP03_0052E",
+                        "DP03_0053E",
+                        "DP03_0054E",
+                        "DP03_0055E",
+                        "DP03_0056E",
+                        "DP03_0057E",
+                        "DP03_0058E",
+                        "DP03_0059E",
+                        "DP03_0060E",
+                        "DP03_0061E",
+                    ],
+                    year=_year,
+                    geography="county",
+                    dataset="acs-acs5-profile",
+                )
+                df = pl.DataFrame(r)
+                df = df.rename(df.row(0, named=True))
+                df = df.slice(1).with_columns(
+                    pl.col("*").exclude("state", "county").cast(pl.Float64)
+                )
+                df = df.rename(
+                    {
+                        "dp03_0001e": "total_population",
+                        "dp03_0003e": "total_civilian_force",
+                        "dp03_0004e": "total_labor_force",
+                        "dp03_0005e": "total_unemployed",
+                        "dp03_0006e": "total_armed_forces",
+                        "dp03_0007e": "total_not_labor",
+                        "dp03_0014e": "total_own_children",
+                        "dp03_0025e": "mean_travel_time",
+                        "dp03_0033e": "agr_fish_employment",
+                        "dp03_0051e": "total_house",
+                        "dp03_0052e": "inc_less_10k",
+                        "dp03_0053e": "inc_10k_15k",
+                        "dp03_0054e": "inc_15k_25k",
+                        "dp03_0055e": "inc_25k_35k",
+                        "dp03_0056e": "inc_35k_50k",
+                        "dp03_0057e": "inc_50k_75k",
+                        "dp03_0058e": "inc_75k_100k",
+                        "dp03_0059e": "inc_100k_150k",
+                        "dp03_0060e": "inc_150k_200k",
+                        "dp03_0061e": "inc_more_200k",
+                    }
+                )
+                df = df.with_columns(
+                    year=_year,
+                    geoid=pl.col("state").str.zfill(2) + pl.col("county").str.zfill(3),
+                )
+                df.write_parquet(file=file_path)
+        return self.conn.sql(
+            f"SELECT * FROM '{self.saving_dir}/raw/acs5/**/*.parquet';"
+        ).pl()
 
     def pull_dp03(self) -> pl.DataFrame:
-        if "DP03Table" not in self.conn.sql("SHOW TABLES;").df().get("name").tolist():
-            init_dp03_table(self.data_file)
+
         for _year in range(2012, 2020):
             if (
                 self.conn.sql(f"SELECT * FROM 'DP03Table' WHERE year={_year}")
@@ -373,37 +505,67 @@ class FoodDeseart(CleanQCEW):
         return self.conn.sql("SELECT * FROM 'DP03Table';").pl()
 
     def gen_food_graph(self, var: str, year: int, qtr: int, title: str):
-        # define data
-        df = self.food_data(year=year, qtr=qtr)
+        # 1. Fetch the data payload (Returns a GeoDataFrame)
+        master_gdf = self.food_data()
+        master_gdf = master_gdf.to_crs(epsg=4326)
 
-        # define choropleth scale
-        quant = df[var]
-        domain = [
-            0,
-            quant.quantile(0.25),
-            quant.quantile(0.50),
-            quant.quantile(0.75),
-            quant.max(),
-        ]
-        scale = alt.Scale(domain=domain, scheme="viridis")
-        # define choropleth chart
+        # 2. Match your example's pattern: Safe Pandas filtering to prevent slicing errors
+        df = master_gdf[
+            (master_gdf["year"] == year) & (master_gdf["qtr"] == qtr)
+        ].copy()
+
+        # Early exit if dataframe is empty for the given year/qtr (from your example)
+        if df.empty:
+            return (
+                alt.Chart()
+                .mark_text()
+                .properties(title=f"No data available for {year} Q{qtr}")
+            )
+
+        # 3. Build the production-ready map exactly matching your template's architecture
         choropleth = (
-            alt.Chart(df, title=title)
-            .mark_geoshape()
-            .transform_lookup(
-                lookup="zipcode",
-                from_=alt.LookupData(data=df, key="zipcode", fields=[var]),
+            alt.Chart(df)
+            .mark_geoshape(
+                stroke="white",  # Clear borders between zip codes
+                strokeWidth=0.5,
             )
             .encode(
-                alt.Color(
+                color=alt.Color(
                     f"{var}:Q",
-                    scale=scale,
-                    legend=alt.Legend(direction="horizontal", orient="bottom"),
-                )
+                    scale=alt.Scale(
+                        scheme="viridis",
+                        type="quantile",  # Switched to quantile per your working example for skewed density counts
+                    ),
+                    legend=alt.Legend(
+                        title=var.replace("_area", " per Sq Km")
+                        .replace("_", " ")
+                        .title(),
+                        direction="horizontal",
+                        orient="bottom",
+                        format=".2f",
+                        gradientLength=200,
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("zipcode:N", title="ZIP Code"),
+                    alt.Tooltip(
+                        f"{var}:Q",
+                        title=var.replace("_", " ").title(),
+                        format=".4f",
+                    ),
+                ],
             )
             .project(type="mercator")
-            .properties(width="container", height=300)
+            .properties(
+                title=f"{title} ({year} Q{qtr})",
+                width="container",
+                height=300,
+            )
+            .configure_view(
+                strokeWidth=0
+            )  # Removes the ugly rectangular chart box around the map
         )
+
         return choropleth
 
     def calculate_spatial_lag(self, df, w, column) -> np.ndarray:
